@@ -2,6 +2,8 @@ import argparse
 import time
 import os
 import json
+import csv  # Added for experiment
+import hashlib  # Added for experiment
 
 import torch
 import torch.nn.functional as F
@@ -113,6 +115,30 @@ def AWT_evaluation(clip_model, args):
 
     pre_features = torch.load(f"./pre_extracted_feat/{args.arch.replace('/', '')}/seed{args.seed}/{dataset_name}.pth")
 
+    results_dir = os.path.join(  # Start of added code block
+            "experiment_results",
+            args.condition
+        )
+    os.makedirs(results_dir, exist_ok=True)
+
+    csv_path = os.path.join(results_dir, "predictions.csv")
+    metrics_path = os.path.join(results_dir, "metrics.json")
+
+    if os.path.exists(csv_path) or os.path.exists(metrics_path):
+        raise FileExistsError(
+            f"Results already exist for condition {args.condition}. "
+                "Back them up or remove them before running again."
+        )
+
+    with open(description_file, "rb") as f:
+        description_hash = hashlib.sha256(f.read()).hexdigest()
+
+    per_image_results = []
+    all_margins = []
+    all_losses = []
+
+    score_temperature = 0.1  # End of added code block
+
     print("number of test samples: {}".format(len(pre_features)))
     progress = ProgressMeter(len(pre_features), [batch_time, top1], prefix='Test: ')
 
@@ -133,6 +159,45 @@ def AWT_evaluation(clip_model, args):
         acc1, = accuracy(output_ot, target, topk=(1,))
         top1.update(acc1[0], 1)
 
+        scores = (  # Added code block
+                output_ot.float() /
+                clip_model.logit_scale.exp().float()
+        ).squeeze(0)
+
+        true_idx = int(target.item())
+        pred_idx = int(scores.argmax().item())
+
+        # Ground-truth score minus the strongest competing score.
+        true_score = scores[true_idx]
+        competitor_scores = scores.clone()
+        competitor_scores[true_idx] = float("-inf")
+        highest_competitor = competitor_scores.max()
+
+        margin = (true_score - highest_competitor).item()
+
+        # Softmax cross-entropy with a fixed evaluation temperature.
+        loss = F.cross_entropy(
+            (scores / score_temperature).unsqueeze(0),
+            target.reshape(1).long()
+        ).item()
+
+        record = {
+            "feature_index": i,
+            "true_class": classnames[true_idx],
+            "predicted_class": classnames[pred_idx],
+            "correct": int(pred_idx == true_idx),
+            "margin": margin,
+            "cross_entropy": loss,
+        }
+
+        # Save the individual score for every class.
+        for class_idx, classname in enumerate(classnames):
+            record[f"score_{classname}"] = scores[class_idx].item()
+
+        per_image_results.append(record)
+        all_margins.append(margin)
+        all_losses.append(loss)  # End of added code block
+
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -142,6 +207,60 @@ def AWT_evaluation(clip_model, args):
 
     print(f'\n *  {dataset_name}')
     progress.display_summary()
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:  # Start of added code block
+        writer = csv.DictWriter(
+            f,
+            fieldnames=per_image_results[0].keys()
+            )
+        writer.writeheader()
+        writer.writerows(per_image_results)
+    
+    num_samples = len(per_image_results)
+    num_correct = sum(r["correct"] for r in per_image_results)
+    
+    per_class_accuracy = {}
+    
+    for classname in classnames:
+        class_records = [
+            r for r in per_image_results
+            if r["true_class"] == classname
+        ]
+    
+        correct = sum(r["correct"] for r in class_records)
+    
+        per_class_accuracy[classname] = {
+            "correct": correct,
+            "total": len(class_records),
+            "accuracy_percent": 100.0 * correct / len(class_records)
+        }
+    
+    metrics = {
+        "condition": args.condition,
+        "dataset": dataset_name,
+        "architecture": args.arch,
+        "seed": args.seed,
+        "num_descriptors": args.num_descriptor,
+        "description_sha256": description_hash,
+        "num_samples": num_samples,
+        "num_correct": num_correct,
+        "accuracy_percent": 100.0 * num_correct / num_samples,
+        "mean_signed_margin": sum(all_margins) / num_samples,
+        "mean_cross_entropy": sum(all_losses) / num_samples,
+        "score_definition": "OT-weighted logits divided by CLIP logit scale",
+        "cross_entropy_temperature": score_temperature,
+        "per_class_accuracy": per_class_accuracy
+    }
+    
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
+    
+    print("\n===== Additional Experimental Metrics =====")
+    print(f"Accuracy:          {metrics['accuracy_percent']:.2f}%")
+    print(f"Mean signed margin: {metrics['mean_signed_margin']:.6f}")
+    print(f"Mean cross-entropy: {metrics['mean_cross_entropy']:.6f}")
+    print(f"Saved predictions:  {csv_path}")
+    print(f"Saved metrics:      {metrics_path}")  # End of added code block
 
 
 def main_worker(args):

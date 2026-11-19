@@ -1,0 +1,1 @@
+a dataset is a small-scale image classification dataset consisting of 100 photographs representing four everyday object categories: chairs, lamps, tables, and vases.

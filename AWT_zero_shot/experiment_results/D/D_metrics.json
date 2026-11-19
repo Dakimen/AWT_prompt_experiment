@@ -1,0 +1,37 @@
+{
+  "condition": "D",
+  "dataset": "household_objects",
+  "architecture": "ViT-B/16",
+  "seed": 0,
+  "num_descriptors": 50,
+  "description_sha256": "430d6c4ba927ed169498d6b8c20e06d01f95ee6920b359bdfe8b3f8bc84034ab",
+  "num_samples": 100,
+  "num_correct": 98,
+  "accuracy_percent": 98.0,
+  "mean_signed_margin": 0.05302020087838173,
+  "mean_cross_entropy": 0.9276361608505249,
+  "score_definition": "OT-weighted logits divided by CLIP logit scale",
+  "cross_entropy_temperature": 0.1,
+  "per_class_accuracy": {
+    "chair": {
+      "correct": 25,
+      "total": 25,
+      "accuracy_percent": 100.0
+    },
+    "lamp": {
+      "correct": 25,
+      "total": 25,
+      "accuracy_percent": 100.0
+    },
+    "table": {
+      "correct": 23,
+      "total": 25,
+      "accuracy_percent": 92.0
+    },
+    "vase": {
+      "correct": 25,
+      "total": 25,
+      "accuracy_percent": 100.0
+    }
+  }
+}

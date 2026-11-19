@@ -1,0 +1,10 @@
+{
+  "dataset_id": "household_objects",
+  "task": "single-label image classification",
+  "classes": [
+    {"id": 0, "name": "chair"},
+    {"id": 1, "name": "lamp"},
+    {"id": 2, "name": "table"},
+    {"id": 3, "name": "vase"}
+  ]
+}
