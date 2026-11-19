@@ -84,7 +84,7 @@ def main_worker(args):
     print("number of test samples: {}".format(len(val_dataset)))
     val_loader = torch.utils.data.DataLoader(
                 val_dataset,
-                batch_size=1, shuffle=True,
+                batch_size=1, shuffle=False,
                 num_workers=args.workers, pin_memory=True)
     
     pre_extract_image_feature(val_loader, clip_model, args)
